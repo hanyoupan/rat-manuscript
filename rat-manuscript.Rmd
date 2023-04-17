@@ -1,0 +1,298 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library("treeio")
+library("ggtree")
+library("karyoploteR")
+library("stringr")
+```
+
+
+# Phylogenetic analysis
+
+## IBS matrices and trees
+
+```{r}
+han_plink_ibs_processor <- function(path_mibs) {
+  mibs = read.table(file = path_mibs) %>% as.matrix()
+  path_mibs_id = paste0(path_mibs, ".id")
+  mibs_id = read.table(file = path_mibs_id)[, 1]
+  dimnames(mibs) = list(mibs_id, mibs_id)
+  ibs_order <- as.dendrogram(hclust(dist(mibs))) %>% order.dendrogram()
+  mibs = mibs[ibs_order, ibs_order]
+  
+  # Mega input
+  mdis = 1-mibs
+  meg = paste0("#", rownames(mdis))
+  meg = c("#mega", "!Title: mdis;", "", meg)
+  meg = c(meg, "")
+  for (i in 2:nrow(mdis)) {
+    words = mdis[i,][1:(i-1)]
+    line = paste0(words, collapse = " ")
+    meg = c(meg, line)
+  }
+  path_out_meg = paste0(path_mibs, ".meg")
+  writeLines(text = meg, con = path_out_meg)
+
+  # Google sheet input
+  path_out = paste0(path_mibs, ".txt")
+  write.table(x = mibs, file = path_out, sep = "\t")
+  
+  return(mibs)
+}
+```
+
+
+### 44 HS founders 
+
+```{r}
+# HS founders
+path_mibs = "/Users/hanyou/hanyou-c/projects/li-lab/rat-manuscript/plink/hs_founders/ibs/chr1-20-b-snp-q30-ibs/chr1-20-b-snp-q30-ibs.mibs"
+han_plink_ibs_processor(path_mibs = path_mibs)
+```
+
+### 163 rats
+
+```{r}
+# 163 rats
+path_mibs = "/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/plink/163-rats/ibs/chr1-20-mnref1-b-snp-q30/chr1-20-mnref1-b-snp-q30.mibs"
+mibs = han_plink_ibs_processor(path_mibs = path_mibs)
+```
+
+```{r}
+path_nwk = "/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/plink/163-rats/ibs/chr1-20-mnref1-b-snp-q30/mega-163-rats/163-rats-UPGMA-edited.nwk"
+tree <- read.tree(path_nwk)
+
+# Long 
+gg = ggtree(tree, ladderize=F) + 
+  geom_tiplab() +
+  xlim(NA, 0.2)
+path_out = paste0(substr(path_nwk, 1, nchar(path_nwk)-4), "-ggtree.png")
+ggsave(filename = path_out, plot = gg, width = 15, height = 45)
+
+# Circular
+gg = ggtree(tree, ladderize=F, layout = "fan", open.angle = 20) + 
+  geom_tiplab(aes(angle=angle), size = 4.8) +
+  theme (plot.margin = unit(c(35,35,30,30), "mm"))
+path_out = paste0(substr(path_nwk, 1, nchar(path_nwk)-4), "-ggtree-2.png")
+ggsave(filename = path_out, plot = gg, width = 15, height = 15)
+```
+
+## 163 rats to substrains
+
+```{r}
+han_plink_ibs_processor_condense <- function(path_mibs) {
+  mibs = read.table(file = path_mibs) %>% as.matrix()
+  path_mibs_id = paste0(path_mibs, ".id")
+  mibs_id = read.table(file = path_mibs_id)[, 1]
+  dimnames(mibs) = list(mibs_id, mibs_id)
+  ibs_order <- as.dendrogram(hclust(dist(mibs))) %>% order.dendrogram()
+  mibs = mibs[ibs_order, ibs_order]
+  
+  # Condense
+  path_mibs_meta = paste0(path_mibs, ".meta")
+  mibs_meta = read.table(file = path_mibs_meta, header = T, sep = "\t", row.names = 1)
+  nc = mibs_meta %>% rownames() %>% nchar()
+  samples_excluded = mibs_meta[substr(rownames(mibs_meta), start = nc, stop = nc) == "*", , drop=F] %>% rownames()
+  mibs_meta = mibs_meta[substr(rownames(mibs_meta), start = nc, stop = nc) != "*", , drop=F] # remove samples end with "*"
+  
+  tags = unique(mibs_meta$Strain.Substrain)
+  
+  # Row condense
+  tags_done = character()
+  mibs_r_con = matrix(data = 0, nrow = length(tags), ncol = ncol(mibs))
+  colnames(mibs_r_con) = colnames(mibs)
+  cur_index = 1L
+  for (i in 1:nrow(mibs)) {
+    if (rownames(mibs)[i] %in% samples_excluded) {
+      next
+    }
+    tag = mibs_meta[[rownames(mibs)[i], 1]]
+    if (tag %in% tags_done) {
+      next
+    }
+    tag_samples = rownames(mibs_meta[mibs_meta$Strain.Substrain==tag, , drop=F])
+    mibs_r_con[cur_index, ] = colMeans(mibs[tag_samples, , drop=F])
+    cur_index = cur_index + 1L
+    tags_done = c(tags_done, tag)
+  }
+  
+  # column condense
+  tags_done = character()
+  mibs_c_con = matrix(data = 0, nrow = length(tags), ncol = length(tags))
+  cur_index = 1L
+  for (i in 1:nrow(mibs)) {
+    if (rownames(mibs)[i] %in% samples_excluded) {
+      next
+    }
+    tag = mibs_meta[[rownames(mibs)[i], 1]]
+    if (tag %in% tags_done) {
+      next
+    }
+    tag_samples = rownames(mibs_meta[mibs_meta$Strain.Substrain==tag, , drop=F])
+    mibs_c_con[cur_index, ] = rowMeans(mibs_r_con[, tag_samples, drop=F])
+    cur_index = cur_index + 1L
+    tags_done = c(tags_done, tag)
+  }
+  dimnames(mibs_c_con) = list(tags_done, tags_done)
+  mibs = mibs_c_con
+  
+  # Mega input
+  mdis = 1-mibs
+  meg = paste0("#", rownames(mdis))
+  meg = c("#mega", "!Title: mdis;", "", meg)
+  meg = c(meg, "")
+  for (i in 2:nrow(mdis)) {
+    words = mdis[i,][1:(i-1)]
+    line = paste0(words, collapse = " ")
+    meg = c(meg, line)
+  }
+  path_out_meg = paste0(path_mibs, ".meg")
+  writeLines(text = meg, con = path_out_meg)
+
+  # Google sheet input
+  path_out = paste0(path_mibs, ".txt")
+  write.table(x = mibs, file = path_out, sep = "\t")
+  
+  return(mibs)
+}
+```
+
+
+```{r}
+path_mibs = "/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/plink/163-rats/ibs/chr1-20-mnref1-b-snp-q30/chr1-20-mnref1-b-snp-q30.mibs"
+mibs = han_plink_ibs_processor_condense(path_mibs = path_mibs)
+```
+
+```{r}
+path_nwk = "/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/plink/163-rats/ibs/chr1-20-mnref1-b-snp-q30/mega-163-rats-to-substrains/mega-163-rats-to-substrains-UPGMA-edited.nwk"
+tree <- read.tree(path_nwk)
+
+# Long 
+gg = ggtree(tree, ladderize=F) + 
+  geom_tiplab() +
+  xlim(NA, 0.2)
+path_out = paste0(substr(path_nwk, 1, nchar(path_nwk)-4), "-ggtree.pdf")
+ggsave(filename = path_out, plot = gg, width = 15, height = 35)
+
+# Circular
+gg = ggtree(tree, ladderize=F, layout = "fan", open.angle = 20) + 
+  geom_tiplab(aes(angle=angle), size = 6.4) +
+  theme (plot.margin = unit(c(25,25,17,15), "mm"))
+path_out = paste0(substr(path_nwk, 1, nchar(path_nwk)-4), "-ggtree-2.png")
+ggsave(filename = path_out, plot = gg, width = 15, height = 15)
+```
+
+# Liftover
+
+## What % of Rnor_6.0 sites can be lifted to mRatBN7.2?
+
+```{r}
+# Generate evenly spaced bed file
+# Lost because I didn't save
+```
+
+## How are the liftable sites distributed on the mRatBN7.2?
+
+```{r}
+chr_length_rn7 = read.table(file = "/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/liftover/chr-length/chr-length-rn7.txt", header = T)
+custom.genome <- toGRanges(data.frame(chr=chr_length_rn7$chr, start=rep(1, nrow(chr_length_rn7)), end=chr_length_rn7$length))
+bed = read.table(file = "/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/liftover/bed-files/es1k-rn6-l2rn7.bed", header = F)
+```
+
+```{r}
+pat = "/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/r/plots/liftover"
+fname = "01-lifted-to-rn7.png"
+bed_sub = bed[seq(1, nrow(bed), 50), ]
+
+# pdf(file = "t.pdf", width = 20, height = 20)
+png(filename = paste0(pat, "/", fname), width = 20, height = 10, units = "in", res = 200)
+kp <- plotKaryotype(genome = custom.genome)
+# kpPoints(kp, chr=bed_sub$V1, x=bed_sub$V3, y = 0.2, cex = 0.1, col = "forestgreen")
+kpSegments(kp, chr=bed_sub$V1, x0 = bed_sub$V3, x1 = bed_sub$V3, y0 = 0.1, y1 = 0.9, col = "forestgreen")
+dev.off()
+```
+
+## How are the unliftable sites distributed on the Rnor_6.0?
+
+```{r}
+chr_length_rn7 = read.table(file = "/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/liftover/chr-length/chr-length-rn6.txt", header = T)
+custom.genome <- toGRanges(data.frame(chr=chr_length_rn7$chr, start=rep(1, nrow(chr_length_rn7)), end=chr_length_rn7$length))
+bed = read.table(file = "/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/liftover/bed-files/es1k-rn6-l2rn7.bed.unlifted", header = F)
+```
+
+```{r}
+pat = "/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/r/plots/liftover"
+fname = "02-not-lifted.png"
+bed_sub = bed[seq(1, nrow(bed), 50), ]
+
+# pdf(file = "t.pdf", width = 20, height = 20)
+png(filename = paste0(pat, "/", fname), width = 20, height = 10, units = "in", res = 200)
+kp <- plotKaryotype(genome = custom.genome)
+# kpPoints(kp, chr=bed_sub$V1, x=bed_sub$V3, y = 0.2, cex = 0.1, col = "forestgreen")
+kpSegments(kp, chr=bed_sub$V1, x0 = bed_sub$V3, x1 = bed_sub$V3, y0 = 0.1, y1 = 0.9, col = "red")
+dev.off()
+```
+
+# Hets region bed file
+
+```{r}
+load("/Users/hanyou/hanyou-c/projects/2022-09-02-li-lab/2022-10-10-rat-manuscript/r/163SampleVariantStat.Rdata")
+```
+
+```{r}
+# Prepare data
+df = df0[df0$HetCnt > 156, ][, 11:12]
+chr_list = unique(df$chr) %>% str_sort(numeric = T)
+```
+
+```{r}
+# Find right cutoff
+inter_marker_dis = integer()
+for (chr in chr_list) {
+  loc = df$loc[df$chr == chr]
+  dis = loc[2:length(loc)] - loc[1:(length(loc)-1)]
+  inter_marker_dis = c(inter_marker_dis, dis)
+}
+inter_marker_dis %>% sort() %>% plot()
+inter_marker_dis %>% sort() %>% plot(log = "y")
+sum(inter_marker_dis>1000)/length(t)
+sum(inter_marker_dis>5000)/length(t)
+
+sum(inter_marker_dis>10000)/length(t)
+```
+
+```{r}
+# Make the bed file
+df_out = as.data.frame(x = matrix(nrow = 0, ncol = 3))
+colnames(df_out) = c("chrom", "chromStart", "chromEnd")
+cutoff = 10000
+for (chr in chr_list) {
+  loc = df$loc[df$chr == chr]
+  df_out[nrow(df_out)+1, ] = data.frame(chr, loc[1], loc[1])
+  for (i in 2:length(loc)) {
+    if (loc[i] <= (df_out[nrow(df_out), 3] + cutoff)) {
+      df_out[nrow(df_out), 3] = loc[i]
+    } else {
+      df_out[nrow(df_out)+1, ] = data.frame(chr, loc[i], loc[i])
+    }
+  }
+}
+df_out[, "length"] = df_out$chromEnd - df_out$chromStart + 1
+df_out = df_out[df_out$length != 1, ]
+print(sum(df_out$length))
+df_out = df_out[, 1:3]
+df_out$chromStart = df_out$chromStart-1 # Bed file is - based
+write.table(x = df_out, file = "t.bed", sep = "\t", quote = F, col.names = F, row.names = F)
+```
+
+
+
+
+
+
+
+
