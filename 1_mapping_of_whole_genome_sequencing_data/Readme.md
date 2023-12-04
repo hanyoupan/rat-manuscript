@@ -1,6 +1,5 @@
 ## Source of WGS data
-
-Downloading data from SRA (using two SRA IDs as an example)  
+SRA IDs are listed in Table S9 of the manuscript. The following script downloads data from SRA (using two SRA IDs as an example)  
 
 ```
 
