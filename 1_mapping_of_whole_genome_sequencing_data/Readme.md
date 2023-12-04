@@ -11,7 +11,7 @@ done
 
 ```
 
-## Mapping linked-read data using longranger
+## Mapping linked-read data using Longranger
 
 ```
 #!/bin/bash
@@ -114,7 +114,7 @@ for SAMPLENAME in  `cat ./samples`; do
 done
 ```
 
-##  Joint variant calling using DLNexus
+##  Joint variant calling using GLNexus
 
 ```
 #!/bin/bash
