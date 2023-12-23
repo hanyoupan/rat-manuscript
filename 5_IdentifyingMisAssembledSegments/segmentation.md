@@ -1,6 +1,6 @@
 ﻿## Step 1. prepare the data for segmentation by DNAcopy
 
-The genotype data are split into 20 files, one for each chromosome. We used the gt.convert function (see [gt_convert.r](./gt_convert.r) to turn genotype codes "0/0", "0/1", and "1/1" into "0", "1", and "2", respectively, with missing or non-diploid genotypes converted into "NA". 
+The genotype data are split into 20 files, one for each chromosome. We used the gt.convert function (see [convert_gt.r](./convert_gt.r) to turn genotype codes "0/0", "0/1", and "1/1" into "0", "1", and "2", respectively, with missing or non-diploid genotypes converted into "NA". 
 
 We extracted the sum of genotype counts for each site over the 12 BN samples
 
@@ -35,7 +35,7 @@ segment is the command in DNAcopy. The parameters `min.width=5,alpha=0.001` were
 
 ## Step 3. merge the segments
 
-We used the merge.segments function (see [merge_segment.r](./merge_segment.r) in this folder folder) to join the segments.  
+We used the merge.segments function (see [merge_segment.r](./merge_segment.r)) to join the segments.  
 
 ## Step 4. repeat for all 20 chromosomes
 
