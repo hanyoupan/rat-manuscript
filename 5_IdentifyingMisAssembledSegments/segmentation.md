@@ -35,7 +35,7 @@ segment is the command in DNAcopy. The parameters `min.width=5,alpha=0.001` were
 
 ## Step 3. merge the segments
 
-We used the merge.segments function (see [merge_segment.r](./merge_segment.r) in this folder folder) to join the segments.  
+We used the merge.segments function (see [merge_segment.r](./merge_segment.r)) to join the segments.  
 
 ## Step 4. repeat for all 20 chromosomes
 
