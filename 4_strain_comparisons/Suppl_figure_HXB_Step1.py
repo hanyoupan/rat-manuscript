@@ -4,8 +4,6 @@ import operator
 import sys
 import os
 
-#cur_dir = "D:\\TriGene\\01_UniversityOfTennessee\\13_Deepvar_vs_gatk\\"
-#os.chdir(cur_dir)
 #location = [
 #	'../09_GATK/GATK/GATK_filtered/joint_called_gvcfs_chr10.vcf.recode.vcf',
 #	'../09_GATK/Deep_Variant/deepVariant_filtered/deepvariant_chr10_48_samples.gvcf.gz.recode.vcf'
